@@ -60,3 +60,25 @@ outputs/
   figures/
   tables/
 ```
+
+# Main scripts
+
+-  02_build_omie_panel.R — clean Spanish day-ahead price panel
+
+-  04_build_omie_curves_panel.R — parse and standardize OMIE curve files
+
+-  05_summarise_omie_curves.R — build hourly curve features
+
+-  06_merge_omie_prices_curves.R — merge hourly prices and curves, aggregate to daily panel
+
+-  07_eda_market_stress.R — exploratory analysis, score construction, figures, summary tables
+
+-  08_validate_stress_score.R — benchmark comparison, incremental-value analysis, alert buckets
+
+-  09_build_qa_table.R — final QA summary table
+
+# Reproducibility
+
+This project is designed as a script-based pipeline rather than a notebook-only workflow.
+
+To reproduce the final outputs, run the scripts in order (script 01 and 03 download raw_files)
