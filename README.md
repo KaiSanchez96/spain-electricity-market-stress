@@ -60,6 +60,4 @@ outputs/
   figures/
   tables/
 data_clean/
-report.pdf
-README.md
 ```
