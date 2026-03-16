@@ -59,5 +59,4 @@ scripts/
 outputs/
   figures/
   tables/
-data_clean/
 ```
