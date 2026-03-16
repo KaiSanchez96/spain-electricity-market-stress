@@ -1,0 +1,5 @@
+bucket,rule,interpretation
+Green,score < 0.50,Normal monitoring conditions
+Amber,0.50 <= score < 0.80,Elevated stress worth monitoring
+Red,0.80 <= score < 0.95,High-priority review tier
+Extreme,score >= 0.95,Extreme stress escalation tier

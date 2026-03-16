@@ -1,0 +1,21 @@
+file_name,colnames,sample_country,sample_offer_type,sample_status,sample_hour
+curva_pbc_20180110.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180112.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180113.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180114.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180115.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180117.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180118.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180119.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180122.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180123.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180124.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180125.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180127.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180128.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180129.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180130.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180131.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180201.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180202.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+curva_pbc_20180203.1,hora | fecha | pais | unidad | tipo_oferta | energia_compra_venta | precio_compra_venta | ofertada_o_casada_c | 9,MI | NA,C | V | NA,O | C | NA,1 | 2 | 3 | 4 | 5 | 6 | 7 | 8

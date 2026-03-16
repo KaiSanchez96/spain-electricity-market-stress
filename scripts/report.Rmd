@@ -1,0 +1,732 @@
+---
+title: "Why Average Price Alone Is Too Narrow for Market Monitoring"
+subtitle: "A data analytics case study in market monitoring and KPI design for the Spanish day-ahead electricity market (2018–2026)"
+author: "Kai A. Sanchez P."
+date: "March 2026"
+output:
+  pdf_document:
+    toc: false
+    number_sections: false
+  html_document:
+    toc: true
+fontsize: 11pt
+geometry: margin=1in
+header-includes:
+  - \usepackage{float}
+  - \usepackage{booktabs}
+  - \usepackage{graphicx}
+  - \usepackage{adjustbox}
+  - \usepackage{capt-of}
+  - \usepackage[none]{hyphenat}
+  - \usepackage{longtable}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  out.width = "0.92\\linewidth",
+  fig.pos = "H"
+)
+
+library(dplyr)
+library(readr)
+library(tibble)
+library(knitr)
+library(tidyr)
+library(scales)
+
+fig_dir <- "outputs/figures"
+tab_dir <- "outputs/tables"
+clean_dir <- "data_clean"
+
+if (!dir.exists(fig_dir)) fig_dir <- "../outputs/figures"
+if (!dir.exists(tab_dir)) tab_dir <- "../outputs/tables"
+if (!dir.exists(clean_dir)) clean_dir <- "../data_clean"
+
+fig <- function(x) file.path(fig_dir, x)
+tab <- function(x) file.path(tab_dir, x)
+cleanf <- function(x) file.path(clean_dir, x)
+
+include_fig_safe <- function(name){
+  f <- fig(name)
+  if (!file.exists(f)) {
+    cat(paste0("\\textbf{[MISSING FIGURE: ", name, "]}"))
+    return(invisible(NULL))
+  }
+  knitr::include_graphics(f)
+}
+
+read_csv_safe <- function(path){
+  if (!file.exists(path)) return(NULL)
+  read.csv(path, stringsAsFactors = FALSE)
+}
+
+daily_main_path <- cleanf("omie_market_panel_daily_enriched.rds")
+daily_val_path  <- cleanf("omie_market_panel_daily_validated.rds")
+
+if (!file.exists(daily_main_path)) stop("Missing file: ", daily_main_path)
+if (!file.exists(daily_val_path)) stop("Missing file: ", daily_val_path)
+
+market_daily <- readRDS(daily_main_path)
+validated_df <- readRDS(daily_val_path)
+
+benchmark_eval      <- read_csv_safe(tab("tab_benchmark_comparison.csv"))
+incremental_summary <- read_csv_safe(tab("tab_incremental_value_summary.csv"))
+profile_summary     <- read_csv_safe(tab("tab_unique_day_profile_summary.csv"))
+comp_vs_price       <- read_csv_safe(tab("tab_composite_unique_vs_price.csv"))
+price_vs_comp       <- read_csv_safe(tab("tab_price_unique_vs_composite.csv"))
+range_vs_comp       <- read_csv_safe(tab("tab_range_unique_vs_composite.csv"))
+alert_thresholds    <- read_csv_safe(tab("tab_alert_thresholds.csv"))
+decision_rules      <- read_csv_safe(tab("tab_decision_rules.csv"))
+annual_summary      <- read_csv_safe(tab("annual_summary.csv"))
+monthly_summary     <- read_csv_safe(tab("monthly_summary.csv"))
+final_qa_summary    <- read_csv_safe(tab("tab_final_qa_summary.csv"))
+weight_sensitivity  <- read_csv_safe(tab("tab_weight_sensitivity_summary.csv"))
+
+coverage_daily <- tibble(
+  min_date = min(market_daily$date, na.rm = TRUE),
+  max_date = max(market_daily$date, na.rm = TRUE),
+  n_days = nrow(market_daily),
+  avg_daily_price = mean(market_daily$avg_price_spain_eur_mwh, na.rm = TRUE),
+  avg_daily_range = mean(market_daily$daily_price_range, na.rm = TRUE)
+)
+
+bucket_distribution <- validated_df %>%
+  mutate(
+    alert_bucket = case_when(
+      score_base >= 0.95 ~ "Extreme",
+      score_base >= 0.80 ~ "Red",
+      score_base >= 0.50 ~ "Amber",
+      TRUE ~ "Green"
+    )
+  ) %>%
+  count(alert_bucket) %>%
+  mutate(share = n / sum(n)) %>%
+  arrange(match(alert_bucket, c("Green", "Amber", "Red", "Extreme")))
+
+kpi_use_table <- tibble(
+  KPI = c("Average daily price", "Daily range", "High-price hours", "Composite score"),
+  best_use = c(
+    "Headline comparison across days and months",
+    "Detecting within-day instability",
+    "Capturing persistence of elevated prices",
+    "Triage and prioritization of broad stress days"
+  ),
+  weakness = c(
+    "Hides intraday structure",
+    "Can overemphasize narrow spikes",
+    "Depends on threshold choice",
+    "Judgment-based and not benchmark-dominant"
+  )
+)
+
+price_range_corr <- cor(
+  market_daily$avg_price_spain_eur_mwh,
+  market_daily$daily_price_range,
+  use = "complete.obs"
+)
+```
+
+# Executive Summary
+
+This project asks a practical monitoring question in the Spanish day-ahead electricity market: is average daily wholesale price enough to summarize market stress?
+
+The answer is no. Average daily price remains a useful headline KPI, but it compresses the day into one number and can miss operationally relevant information. Two days with similar average prices can still differ materially in intraday dispersion, concentration of high-price hours, and the broader shape of stress across the day.
+
+To address that limitation, the project builds and evaluates a broader monitoring KPI. The final framework distinguishes between a core stress score based on price level, intraday range, and high-price-hour concentration, and an extended score that adds cleared-curve complexity as a secondary interpretive signal.
+
+The main result is deliberately nuanced. Under an internal recall-style benchmark, the composite score does not outperform simpler one-metric rules such as average daily price or daily range. That rules out the strongest possible claim.
+
+The score’s value lies elsewhere: it changes which days rise to the top of the review queue and helps identify a distinct, interpretable class of multidimensional stress days that single-metric rules do not prioritize in the same way.
+
+This is therefore a KPI-design and monitoring case study, not a structural model of electricity prices. Its contribution is practical: a one-number dashboard is too narrow for operational monitoring, and a broader descriptive lens can improve triage, review, and communication.
+
+# Business Problem
+
+A market dashboard often leads with one number: average daily price. That KPI is useful for quick comparison across days, months, and years. But it can also hide information that matters operationally.
+
+For a market monitoring analyst, that creates a practical problem:
+
+- a day with a moderate average price can still have large within-day volatility,
+
+- stress can be concentrated in a subset of hours rather than spread evenly,
+
+- and some days deserve analyst attention not because they are simply expensive, but because stress is broad across multiple dimensions.
+
+In other words, a price-only dashboard can mis-rank review effort. Some expensive days are operationally straightforward, while some moderate-price days deserve review because intraday stress is wider or more irregular than the headline average suggests.
+
+# Data and Pipeline
+
+The project combines two (Nominated Electricity Market Operator) OMIE-based inputs:
+
+1. Spanish day-ahead hourly prices  
+
+2. Day-ahead cleared curves, summarized into hourly market features  
+
+The main data-engineering challenge is that OMIE curve files change structure over time. The pipeline standardizes multiple raw formats into a single clean panel, summarizes curves to hourly features, merges those features with hourly prices, and aggregates the merged panel to daily monitoring features.
+
+The final daily analytical panel uses the intersection of hourly prices and hourly cleared-curve summaries. This prioritizes comparability and integrity over maximal raw coverage.
+
+```{r coverage-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    coverage_daily %>%
+      transmute(
+        `Start date` = min_date,
+        `End date` = max_date,
+        `Daily observations` = n_days,
+        `Average daily price (EUR/MWh)` = round(avg_daily_price, 1),
+        `Average daily range (EUR/MWh)` = round(avg_daily_range, 1)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Analytical panel coverage.}\n")
+cat("\\end{table}\n")
+```
+
+# Reproducibility
+
+The project is designed as a script-based analytical pipeline rather than a single notebook workflow. Raw OMIE files are downloaded, standardized, summarized, merged, and validated through sequential R scripts, with intermediate outputs written to `data_clean/` and final tables and figures written to `outputs/tables/` and `outputs/figures/`.
+
+In practical terms, the report depends on the following stages:
+
+1. price panel construction,
+
+2. raw curve parsing and standardization across file formats,
+
+3. hourly curve summarization,
+
+4. hourly merge with prices,
+
+5. daily feature construction,
+
+6. exploratory analysis, score construction, validation, and QA table generation.
+
+This structure improves reproducibility in two ways. First, each stage leaves auditable intermediate files rather than only in-memory objects. Second, the final report reads pre-built analytical outputs, which separates data engineering, KPI construction, and reporting into distinct layers.
+
+To reproduce the final outputs, the scripts should be run in pipeline order before knitting this report. The report then loads the cleaned daily panels, validation outputs, and generated figures/tables directly from disk.
+
+The main execution order is: price panel construction, curve parsing, hourly curve summarization, hourly merge, exploratory analysis, score validation, and QA summary generation, assuming raw downloads already exist.
+
+# Data Quality and QA Checks
+
+Before constructing the analytical panel, I ran integrity checks on the raw OMIE curve files, the summarized hourly curve panel, and the merged hourly price-curve panel. These checks focused on format consistency, parsing losses, duplicate date-hour rows, retained overlap, and DST handling.
+
+```{r qa-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    final_qa_summary,
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Summary of key data-quality and integrity checks.}\n")
+cat("\\end{table}\n")
+```
+
+These checks suggest that the analytical panel is not being driven by duplicate joins, DST mishandling, or major parsing failures. The merged panel retains full daily coverage relative to prices and nearly full daily coverage relative to curves, with expected 23-hour DST days preserved.
+
+# Finding 1: Average Daily Price Is Useful, but Incomplete
+
+```{r fig-daily-price, fig.cap="Daily average price in the Spanish day-ahead market."}
+include_fig_safe("01_daily_average_price.png")
+```
+
+Figure 1 provides the standard market view. It captures broad regime changes clearly, including the 2021–2022 stress episode and the lower-price environment that follows.
+
+As a headline KPI, this figure is useful. It summarizes the market in a compact and intuitive way. But that is also its limitation: a daily average cannot tell us whether the day was relatively smooth or whether stress was concentrated in a handful of hours.
+
+# Finding 2: Intraday Range Reveals Hidden Stress
+
+```{r fig-daily-range, fig.cap="Daily intraday price range."}
+include_fig_safe("02_daily_price_range.png")
+```
+
+Figure 2 shows the daily intraday range: the difference between the highest and lowest hourly prices within a day.
+
+This is where the weakness of the average becomes visible. There are periods where average daily price is not especially extreme, but within-day range is still large. A dashboard that only reports average daily price would miss that dimension.
+
+# Finding 3: Similar Average-Price Days Can Behave Very Differently
+
+```{r fig-price-vs-range, fig.cap="Average daily price versus daily intraday range."}
+include_fig_safe("03_avg_price_vs_range.png")
+```
+
+Figure 3 compares average daily price and daily intraday range directly.
+
+There is a positive relationship, but it is far from one-to-one. The correlation between the two metrics is `r round(price_range_corr, 3)`. Within similar average-price ranges, daily range still varies substantially. That is the operational gap a price-only KPI leaves unresolved.
+
+# Finding 4: A Broader Monitoring Score Improves the Lens
+
+The project translates that critique into a practical monitoring KPI.
+
+The core stress score combines:
+
+- 40% daily average price
+
+- 40% daily intraday range
+
+- 20% number of high-price hours
+
+The extended score adds:
+
+- 10% cleared-curve complexity
+
+Before weighting, each score component is winsorized and rescaled to the unit interval. This ensures that the score combines relative position across dimensions rather than raw values in different units. The weighting scheme is intentionally heuristic and monitoring-oriented. It is designed for interpretability and operational triage rather than statistical optimization.
+
+
+This distinction matters. The core score uses the strongest and most stable descriptive signals. The extended score preserves some structural information from the cleared curves, but treats it as a secondary interpretive signal rather than a dominant driver.
+
+
+
+```{r fig-stress-score, fig.cap="Composite market stress score (extended version)." }
+include_fig_safe("06_market_stress_score.png")
+```
+
+```{r weight-sensitivity-table, results='asis'}
+if (!is.null(weight_sensitivity)) {
+  cat("\\begin{table}[H]\n\\centering\n")
+  print(
+    knitr::kable(
+      weight_sensitivity %>%
+        transmute(
+          Variant = variant,
+          Weights = weights,
+          `Correlation with base` = correlation_with_base,
+          `Top-20 overlap with base` = overlap_top20
+        ),
+      format = "latex",
+      booktabs = TRUE
+    ),
+    include.rownames = FALSE
+  )
+  cat("\\caption{Sensitivity of the score to alternative weighting schemes.}\n")
+  cat("\\end{table}\n")
+}
+```
+
+This helps answer a basic robustness question: if the weights move moderately, does the ranking collapse? In this project, the answer appears to be no. That does not prove the weights, but it shows that the ranking is not purely an artifact of one exact specification.
+
+# Score Validation: Useful, but Not Universally Superior
+
+This benchmark is deliberately narrow and internal. It tests how well each metric recovers internally defined one-dimensional stress events, not whether a metric is operationally superior under external ground truth.
+
+Internal stress events are defined as days in the top 5% of at least one of three variables: average daily price, daily range, or number of high-price hours.
+
+Because the internal event definition is constructed from variables that are closely related to the score and its comparators, this benchmark should be interpreted cautiously. It is useful for comparing internal alignment across candidate KPIs, but it is not an external validation of operational superiority. In that sense, the exercise measures relative consistency with internally defined stress conditions more than real-world ground truth.
+
+```{r fig-benchmark-recall, fig.cap="Benchmark comparison: recall of internally defined stress events."}
+include_fig_safe("14_benchmark_recall_comparison.png")
+```
+
+```{r benchmark-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    benchmark_eval %>%
+      transmute(
+        Metric = metric,
+        `Flagged days` = flagged_days,
+        `Captured internal stress` = captures_internal_stress,
+        `Precision` = round(precision_internal_stress, 3),
+        `Recall` = round(recall_internal_stress, 3)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Internal validation: composite score versus simpler benchmarks.}\n")
+cat("\\end{table}\n")
+```
+
+The result is clear. On this internal recall-based benchmark, the composite score does not outperform average daily price or daily range. That rules out the strongest possible claim.
+
+At the same time, the result should not be read as evidence that the score is uninformative. The core and extended versions still identify a concentrated subset of high-stress days with interpretable profiles. The practical implication is narrower and more useful: simple one-metric rules remain strong for this internal recall task, while the composite score remains valuable as a broader prioritization and triage metric.
+
+The correct interpretation is narrower and more credible:
+
+> The composite score is best understood as a broader monitoring and prioritization metric, not as a universally dominant benchmark.
+
+# Incremental Value: The Score Flags Different Kinds of Days
+
+The most useful result from the benchmark exercise is not recall alone, but incremental value. The composite score and single-metric rules do not flag exactly the same days. That means the score is not simply reproducing price or range with more arithmetic; it changes which days move to the top of the review queue.
+
+```{r fig-incremental-value, fig.cap="Incremental value: uniquely flagged days by KPI comparison."}
+include_fig_safe("15_incremental_value_unique_days.png")
+```
+
+```{r incremental-summary-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+print(
+  knitr::kable(
+    incremental_summary %>%
+      transmute(
+        Comparison = comparison,
+        `Number of unique days` = n_days
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("\\caption{Uniquely flagged days across KPI comparisons.}\n")
+cat("\\end{table}\n")
+```
+
+## Profile Differences Across Uniquely Flagged Days
+
+```{r profile-summary-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    profile_summary %>%
+      transmute(
+        Group = group,
+        `Days` = n_days,
+        `Avg price` = round(avg_price_mean, 1),
+        `Avg range` = round(daily_range_mean, 1),
+        `Avg high-price hours` = round(high_price_hours_mean, 2),
+        `Avg score` = round(score_mean, 3)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Average profiles of uniquely flagged day groups.}\n")
+cat("\\end{table}\n")
+```
+
+These groups differ not only in membership, but in character.
+
+- Composite-only days relative to price tend to have lower average price, much wider daily ranges, and fewer high-price hours than price-only days.
+
+- Range-only days relative to the composite tend to reflect sharper intraday instability without equally broad stress across the day.
+
+That is the score’s main contribution. It does not maximize recall of narrow internal event rules. It re-ranks attention toward days where stress is broader than a single dimension.
+
+## Illustrative Examples
+
+```{r comp-vs-price-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    head(comp_vs_price, 6) %>%
+      transmute(
+        Date = as.Date(date),
+        `Avg price` = round(avg_price_spain_eur_mwh, 1),
+        `Daily range` = round(daily_price_range, 1),
+        `High-price hours` = n_high_price_hours,
+        `Composite score` = round(score_base, 3)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Illustrative composite-only days relative to a price-only rule.}\n")
+cat("\\end{table}\n")
+```
+
+```{r price-vs-comp-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    head(price_vs_comp, 6) %>%
+      transmute(
+        Date = as.Date(date),
+        `Avg price` = round(avg_price_spain_eur_mwh, 1),
+        `Daily range` = round(daily_price_range, 1),
+        `High-price hours` = n_high_price_hours,
+        `Composite score` = round(score_base, 3)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Illustrative price-only days relative to the composite score.}\n")
+cat("\\end{table}\n")
+```
+
+```{r range-vs-comp-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    head(range_vs_comp, 6) %>%
+      transmute(
+        Date = as.Date(date),
+        `Avg price` = round(avg_price_spain_eur_mwh, 1),
+        `Daily range` = round(daily_price_range, 1),
+        `High-price hours` = n_high_price_hours,
+        `Composite score` = round(score_base, 3)
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Illustrative range-only days relative to the composite score.}\n")
+cat("\\end{table}\n")
+```
+
+# Supporting Evidence: Hourly Structure Still Matters
+
+```{r fig-heatmap, fig.cap="Monthly heatmap of average hourly prices."}
+include_fig_safe("04_hourly_price_heatmap.png")
+```
+
+The market has a strong and persistent hourly structure. Some hours are systematically more expensive than others, and some periods show much more pronounced within-day variation than the daily average alone would suggest.
+
+# When Would I Use Which KPI?
+
+```{r kpi-use-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    kpi_use_table %>%
+      transmute(
+        KPI = KPI,
+        `Best use` = best_use,
+        Weakness = weakness
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Best use and weakness of each KPI in a monitoring workflow.}\n")
+cat("\\end{table}\n")
+```
+
+No single metric does everything well. The headline average is good for comparison. Daily range is good for spotting instability. High-price hours help identify persistent expensive conditions. The composite score is most useful when the analyst wants to rank broad stress days rather than simply count expensive or high-dispersion episodes.
+
+# From Analysis to Monitoring Product
+
+The project is most useful when translated into a monitoring workflow. A dashboard could show:
+
+- average daily price,
+
+- daily intraday range,
+
+- high-price-hour concentration,
+
+- composite stress score,
+
+- and an alert bucket.
+
+```{r fig-alert-buckets, fig.cap="Illustrative alert bucket distribution."}
+include_fig_safe("16_alert_bucket_distribution.png")
+```
+
+```{r alert-thresholds-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    alert_thresholds %>%
+      transmute(
+        Bucket = bucket,
+        Rule = rule,
+        Interpretation = interpretation
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Illustrative alert thresholds for a monitoring workflow.}\n")
+cat("\\end{table}\n")
+```
+
+```{r bucket-share-table, results='asis'}
+bucket_dist_table <- bucket_distribution %>%
+  transmute(
+    Bucket = alert_bucket,
+    `Share of days` = paste0(round(100 * share, 1), "%")
+  )
+
+cat("\\begin{table}[H]\n\\centering\n")
+print(
+  knitr::kable(
+    bucket_dist_table,
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("\\caption{Observed distribution of alert buckets in the daily panel.}\n")
+cat("\\end{table}\n")
+```
+
+```{r decision-rules-table, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    decision_rules %>%
+      transmute(
+        Condition = condition,
+        Interpretation = interpretation,
+        `Suggested action` = suggested_action
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Illustrative decision rules for analyst review.}\n")
+cat("\\end{table}\n")
+```
+
+Even without formal calibration, the bucket framework helps translate a descriptive score into a more structured analyst workflow.
+
+# Limitations
+
+This is a descriptive monitoring project, not a structural market model.
+
+Several limitations define the scope of this project.
+
+- The benchmark is internal and partially self-referential: stress events are defined using variables closely related to the score and its comparators. As a result, the validation tests internal alignment rather than external operational performance.
+
+- The weighting scheme is transparent and interpretable, but still judgment-based rather than optimized against external outcomes.
+
+- The high-price-hours component is threshold-dependent, which makes the score partly sensitive to the choice of cutoffs.
+
+- The final score depends on prior winsorization and rescaling choices, which are necessary for comparability across components but not innocuous.
+
+- Cleared-curve complexity is conceptually useful but less comparable across file-format and market-period regimes, especially toward the end of the sample.
+
+- The project does not validate the score against external labels such as known market incidents, analyst review logs, or ex post operational classifications.
+
+These limitations do not eliminate the score’s usefulness. They define its scope correctly.
+
+## Next-Step Validation
+
+A stronger next version of the project would validate the score against semi-external or external outcomes, such as known market incidents, analyst review notes, balancing-market volatility, interconnection disruptions, fuel-price shocks, or manually labeled stress episodes. That would make it possible to test whether the composite score delivers a measurable operational gain relative to simpler rules—for example, earlier detection of relevant days, better top-N prioritization, or lower false-positive rates for certain types of review.
+
+# Conclusion
+
+This project shows that average daily wholesale price is a useful but incomplete summary of market stress in the Spanish day-ahead electricity market.
+
+Four conclusions follow:
+
+1. Average daily price is necessary, but too narrow on its own.  
+
+2. Daily range and high-price concentration add meaningful monitoring information.  
+
+3. The composite score is not a universal winner on internal recall-based validation.  
+
+4. The composite score still adds value as a prioritization tool by identifying a distinct and interpretable class of multidimensional stress days.
+
+For monitoring purposes, the practical lesson is not that headline price is useless, but that it is too narrow to rank market stress on its own.
+
+# Appendix
+
+## Appendix A: Supporting Tables
+
+### Annual summary
+
+```{r annual-summary, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    annual_summary %>%
+      transmute(
+        Year = year,
+        `Avg daily price` = round(avg_daily_price, 1),
+        `Avg daily range` = round(avg_daily_range, 1),
+        `Avg high-price hours` = round(avg_high_price_hours, 2),
+        `Avg cleared steps` = round(avg_total_steps, 0),
+        `Avg core score` = round(avg_stress_score_core, 3),
+        `Avg extended score` = round(avg_stress_score_extended, 3),
+        Days = n_days
+      ),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Annual summary statistics.}\n")
+cat("\\end{table}\n")
+```
+
+The visible increase in cleared steps in 2025–2026 should be interpreted with caution. Because cleared-step counts are less comparable across file-format and market-period regimes, this feature is treated in the main analysis as a secondary interpretive signal rather than a core ranking driver. That is precisely why the project distinguishes between a core score and an extended score.
+
+
+### Monthly summary (sample)
+
+```{r monthly-summary, results='asis'}
+cat("\\begin{table}[H]\n\\centering\n")
+cat("\\resizebox{\\linewidth}{!}{%\n")
+print(
+  knitr::kable(
+    monthly_summary %>%
+      transmute(
+        Year = year,
+        Month = month_label,
+        `Avg daily price` = round(avg_daily_price, 1),
+        `Avg daily range` = round(avg_daily_range, 1),
+        `Avg total steps` = round(avg_total_steps, 0),
+        `Avg extended score` = round(avg_stress_score_extended, 3)
+      ) %>%
+      slice_head(n = 24),
+    format = "latex",
+    booktabs = TRUE
+  ),
+  include.rownames = FALSE
+)
+cat("}\n")
+cat("\\caption{Monthly summary (first 24 rows shown).}\n")
+cat("\\end{table}\n")
+```
+
+## Appendix B: Supporting Figures
+
+### Hourly average price profile
+
+```{r fig-hourly-profile, fig.cap="Average price by hour of day."}
+include_fig_safe("09_hourly_average_price_profile.png")
+```
+
+### Hourly cleared-step profile
+
+```{r fig-hourly-steps, fig.cap="Average cleared steps by hour of day."}
+include_fig_safe("10_hourly_average_steps_profile.png")
+```
+
+### Monthly stress seasonality
+
+```{r fig-monthly-stress, fig.cap="Monthly stress seasonality."}
+include_fig_safe("11_monthly_stress_seasonality.png")
+```

@@ -1,0 +1,7 @@
+metric,flagged_days,captures_internal_stress,precision_internal_stress,recall_internal_stress
+Average daily price,149,149,1,0.5173611111111112
+Daily range,149,149,1,0.5173611111111112
+Composite score (extended),149,142,0.9530201342281879,0.4930555555555556
+Composite score (core),149,141,0.9463087248322147,0.4895833333333333
+Composite without steps,149,141,0.9463087248322147,0.4895833333333333
+Price-range combination,149,127,0.8523489932885906,0.4409722222222222

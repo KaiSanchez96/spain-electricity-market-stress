@@ -1,0 +1,5 @@
+variant,weights,correlation_with_base,overlap_top20
+base,35/35/20/10,1,1
+core,40/40/20/0,0.9916114265319073,1
+no_steps,40/40/20/0,0.9916114265319073,1
+price_range_only,50/50/0/0,0.9749569233782976,0.8

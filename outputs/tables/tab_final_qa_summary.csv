@@ -1,0 +1,16 @@
+metric,value
+Raw curve formats detected,"3 formats: legacy hourly, numeric Periodo hourly, quarter-hourly Periodo"
+Raw curve files processed,2991
+Curve files flagged as defective,0
+Rows kept after curve parsing filters,324394781
+Dropped curve row share,0.000114
+Share of days with quarter-hourly source rows,0.053828
+Days with quarter-hourly source rows,161
+Average quarter-row share within hourly summaries,0.053834
+Raw price files processed,2986
+Rows kept after price parsing filters,71656
+Hourly merge duplicate date-hour rows,0
+Hourly rows in merged panel,71656
+Days in merged panel,2986
+Daily coverage retained vs prices,1
+Daily coverage retained vs curves,0.998328

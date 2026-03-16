@@ -1,0 +1,5 @@
+condition,interpretation,suggested_action
+High score + high average price,Broad and persistent expensive conditions,Escalate for analyst review
+High score + wide daily range + fewer high-price hours,Multidimensional stress without uniformly high prices,Review intraday structure and specific hours
+Low score + high average price,Persistently expensive but less multidimensional day,Track as headline expensive day
+High range-only profile,Sharp intraday dispersion rather than broad stress,Flag for volatility-focused review
